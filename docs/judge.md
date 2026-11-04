@@ -7,14 +7,30 @@ The judge is the core of the method. The agent may try anything, but only a PASS
 | Gate | What it checks | Verdict on failure |
 |---|---|---|
 | 0 Structure | The entry points the judge drives (`main()`, `parse_args()`, everything in `train()` outside the per-step loop) match the baseline AST; the dataset class yields bitwise-identical batches on the frozen fixture; every exact item of the short cases matches: phase, number of model forward calls, RNG fingerprint before and after each step, learning rate, step counter, cross-rank pattern, tensor names and shapes, all values finite | ERROR / INCORRECT |
-| 1 Benefit | Baseline → candidate → baseline in three independent processes with cold compile caches; every window is accepted on its own (a window ratio that drifts from the frozen baseline is INVALID and rerun); the speedup must exceed `max(1.02, 1 + 2 × relative gap between the two baseline runs)` | UNAVAILABLE (no_benefit); precision is not evaluated |
+| 1 Benefit | The agent's `check`: one fresh process of the candidate with a cold compile cache, against the baseline timing frozen at formulation (the mean of its baseline runs, each warmup + window × repeats). The final check (`check --final`, run by the harness only): baseline → candidate → baseline in three independent processes, every window accepted on its own (a window ratio that drifts from the frozen baseline is INVALID and rerun). The speedup must exceed `max(1.02, 1 + 2 × the baseline spread)`: the gap between the two baseline runs in the final check, the frozen runs' spread in the agent's `check` | UNAVAILABLE (no_benefit); precision is not evaluated |
 | 2 Bitwise | In deterministic mode, record 1–2-step cases; every tensor (loss / out / grad / delta / optim / buffer) must match bit for bit. Large tensors are compared through a CountSketch, with norms and hashes stored separately | If not bitwise, go to gate 3 |
-| 3 Statistical | In deterministic mode, paired-seed short trajectories (tens to a few hundred steps), 5–7 endpoints. Start with 3 seeds: any endpoint beyond δ with p < 0.05 fails, all endpoints within δ pass; otherwise extend to 6 seeds, and a mean beyond δ fails | INCORRECT |
+| 3 Statistical | In deterministic mode, one paired short trajectory (tens to a few hundred steps) on the first frozen baseline seed, 5–7 endpoints. Each endpoint's bias (candidate − baseline) within 3σ passes (N1); any endpoint beyond 3σ fails. The same rule in every check | INCORRECT |
 
 - **Exact items come first.** A failed exact item is always INCORRECT: the candidate does something different. ERROR is only for the case where every exact item holds but the tensors still disagree.
 - **Tiers.** N0 = everything bitwise identical, with no change of dtype or math mode; N1 = the same real-valued function; N2 = a change of dtype or accumulation precision. Anything beyond N2 is INCORRECT. **Never trust the tier a candidate claims for itself**: a change of an internal accumulator's dtype does not show up in the judge's dtype inventory and can only be found by reading the code.
-- **δ** is twice the standard deviation of the baseline across its own seeds, frozen before any candidate is seen. Every candidate is compared with the **original baseline**, never with the previously accepted candidate.
+- **σ** is the standard deviation of the baseline across its own seeds (6 or more, `numerics traj-freeze`), frozen before any candidate is seen; gate 3 bounds each endpoint's bias on one seed by 3σ (`numerics traj-compare --sigma-k 3`). Every candidate is compared with the **original baseline**, never with the previously accepted candidate.
+- **The bitwise records hash every recorded tensor with SHA-256.** `numerics/shapipe.py` overlaps the device-to-host copies (pinned, asynchronous) and the hashing (a thread pool), with the same digests as hashing one tensor after the other.
 - **Control arm.** Apply a small known perturbation to the baseline (for example `lr × 1.02`); the statistical gate must reject it as INCORRECT, otherwise it is not sensitive enough.
+
+## Check modes
+
+The bench's `check` has the following modes. Every GPU command holds the bench's lock, so they run one at a time.
+
+| Command | Gates | Timing | Statistical gate | Who runs it |
+|---|---|---|---|---|
+| `time` | — | the candidate once, against the frozen baseline timing | — | the agent |
+| `check --quick` | 0, exact items of 2 | — | — | the agent |
+| `check --skip-timing` | 0, 2, 3 | — | one seed, 3σ | the agent |
+| `check` | 0, 1, 2, 3 | the candidate once, against the frozen baseline timing; interference is reported, not rejected | one seed, 3σ | the agent |
+| `check --n1` | 0, 3 | — | one seed, 3σ | the agent, after a `check` whose gate 2 was not bitwise identical |
+| `check --final` | 0, 1, 2, 3 | baseline → candidate → baseline; interference → INVALID | one seed, 3σ | the harness only (`goal/clawo/judge.sh`), after the agent has stopped |
+
+`check --final` is refused unless the harness's marker `task/final-evaluation` exists: `judge.sh` writes it from outside the sandbox (where `ws/task` is read-only) right before the final check and removes it afterwards. The agent's `check` runs every gate the final check runs, with the same rules; only the timing of gate 1 differs.
 
 ## When the judge may change, and when it may not
 
@@ -40,4 +56,5 @@ The judge is the core of the method. The agent may try anything, but only a PASS
 - It measures steady-state step time only, not one-time O(dataset) costs. Say so when formulating the task, or ask candidates to report their startup cost.
 - Exact items such as forward-call counts reject a mathematically equivalent "merge several forwards into one batched forward", and whether they do depends on whether the merged calls go through `__call__`.
 - A 60-step trajectory cannot catch slow drift. Only a real long training run gives that evidence.
+- One seed is noisier than the mean of several. Where paired runs decorrelate within the trajectory (GAN training), a legitimate change's single-seed bias can exceed 3σ; check the control arms and a known-equivalent variant at formulation, and lengthen or move the endpoints if they cannot be told apart.
 - Shape-dependent crashes are invisible to `time` and `check --quick`; the statistical gate sometimes catches them because it uses a different per-GPU batch.

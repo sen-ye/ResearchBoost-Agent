@@ -1,6 +1,9 @@
 #!/bin/bash
 # The final full check, run by claw-orchestrator after the goal stops. Reads ws/FINAL.json and runs the frozen
-# bench on that candidate inside the task's sandbox, with the same GPUs the agent had.
+# bench's `check --final` (reference -> candidate -> reference timing, interference rules enforced) on that candidate
+# inside the task's sandbox, with the same GPUs the agent had. The bench refuses --final unless ws/task/final-evaluation
+# exists: written here, outside the sandbox (inside it ws/task is read-only, so the agent cannot create it), and
+# removed when the check ends, before accept.py compares the judge with its launch digests.
 #   usage: judge.sh <task> "<gpu indices>" <bench entry point>
 set -uo pipefail
 TASK=$1; GPUS=$2; BENCH=$3
@@ -19,7 +22,10 @@ PY
 OUT=runs/clawo-final/$(date +%m%d_%H%M%S)
 mkdir -p "$W/runs/clawo-final"
 ln -sfn "$(basename "$OUT")" "$W/runs/clawo-final/latest"
-args=(python "$BENCH" check --tree "$TREE" --out "$OUT")
+MARKER=$W/task/final-evaluation
+date +%s > "$MARKER"
+trap 'rm -f "$MARKER"' EXIT
+args=(python "$BENCH" check --final --tree "$TREE" --out "$OUT")
 [ -n "$CONFIG" ] && args+=(--config "$CONFIG")
 echo "judging tree=$TREE config=${CONFIG:-none} -> $OUT"
 "$SANDBOX" "$TASK" "$GPUS" "${args[@]}"

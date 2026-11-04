@@ -13,7 +13,7 @@ Tooling for running one `/goal` session (Codex or Claude Code) on a task, unatte
 | `sandbox/background.sh` | `background.sh <log> <task> "<gpus>" command ...`: the same sandbox in the background under a parent that waits for it, for long formulation runs started from a session that then exits |
 | `clawo/run.sh` | `MIN_SPEEDUP=… run.sh <task> "<gpus>"`: start the run on claw-orchestrator — a `/goal` from `ws/GOAL_LINE.txt` on the recorded engine inside the sandbox, followed by the final full check |
 | `clawo/serve.sh` | Start `clawo serve` when it is not running (used by `run.sh` and `resume.sh`) |
-| `clawo/judge.sh`, `clawo/accept.py` | The final check `run.sh` writes into the run: `bench.py check` on the candidate in `ws/FINAL.json`, in the sandbox; then PASS, speedup ≥ `MIN_SPEEDUP`, and the judge unchanged since launch |
+| `clawo/judge.sh`, `clawo/accept.py` | The final check `run.sh` writes into the run: `bench.py check --final` on the candidate in `ws/FINAL.json`, in the sandbox (`judge.sh` writes the marker that allows `--final`); then a `--final` PASS, speedup ≥ `MIN_SPEEDUP`, and the judge unchanged since launch |
 | `clawo/status.sh`, `steer.sh`, `resume.sh`, `stop.sh` | The run's state and the goal's progress; a rule-level reminder into the running turn; reattach after a restart (starting `clawo serve` again); interrupt and pause |
 | `supervise/watch.sh` | Supervisor watchdog: exits with one `EVENT` line when the run stops, the goal was resumed, a new round appears, the GPUs sit idle, a full check passes, or disk runs low |
 | `templates/FORMULATOR_BRIEF.md` | Brief for the agent that formulates, launches and supervises a task: no-answer rule, data policy, environment, judge logic, acceptance checklist, supervision rules |

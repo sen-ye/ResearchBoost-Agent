@@ -26,9 +26,22 @@ FWD_KINDS = ('loss', 'out')
 PARAM_KINDS = ('grad', 'delta', 'optim', 'ema', 'buffer')
 
 
-def tensor_sha(t):
-    t = t.detach().contiguous().cpu().reshape(-1)
-    return hashlib.sha256(t.view(torch.uint8).numpy().tobytes() if t.numel() else b'').hexdigest()
+try:                                       # tensor_sha: the synchronous reference formulation
+    from .shapipe import ShaPipeline, tensor_sha  # noqa: E402,F401
+except ImportError:                        # record.py loaded on its own (tests): the sibling file
+    import importlib.util as _importlib_util
+    _spec = _importlib_util.spec_from_file_location('numerics_shapipe', Path(__file__).with_name('shapipe.py'))
+    _shapipe = _importlib_util.module_from_spec(_spec)
+    _spec.loader.exec_module(_shapipe)
+    ShaPipeline, tensor_sha = _shapipe.ShaPipeline, _shapipe.tensor_sha
+
+
+def resolve_shas(described):
+    """Replace the ShaPipeline futures in describe() results by their digests (in place); returns described."""
+    for d in described.values():
+        if hasattr(d.get('sha256'), 'result'):
+            d['sha256'] = d['sha256'].result()
+    return described
 
 
 def rng_fingerprint():
@@ -126,9 +139,11 @@ def seed_everything(seed):
         pass
 
 
-def describe(kind, t):
+def describe(kind, t, sha=None):
+    """sha: the tensor's digest or a ShaPipeline future of it (resolve_shas() replaces futures); default computed here."""
     floating = t.is_floating_point() or t.is_complex()
-    return {'kind': kind, 'dtype': str(t.dtype).replace('torch.', ''), 'shape': list(t.shape), 'sha256': tensor_sha(t),
+    return {'kind': kind, 'dtype': str(t.dtype).replace('torch.', ''), 'shape': list(t.shape),
+            'sha256': tensor_sha(t) if sha is None else sha,
             'norm': float(t.detach().double().norm()) if floating else None,
             'finite': bool(torch.isfinite(t).all()) if floating else True}
 
@@ -292,7 +307,10 @@ class Recorder:
                 for tname, tv in tensors.items():
                     for cname, cv in a.canonical(tname.split('/', 1)[0], tname, tv).items():
                         mapped[cname] = cv.detach()
-                described = {n: describe(n.split('/', 1)[0], t) for n, t in sorted(mapped.items())}
+                with ShaPipeline() as pipe:      # digests overlap the norms (asynchronous pinned copies, threads)
+                    shas = {n: pipe.submit(t) for n, t in mapped.items()}
+                    described = resolve_shas({n: describe(n.split('/', 1)[0], t, sha=shas[n])
+                                              for n, t in sorted(mapped.items())})
                 stored = {}
                 for n, t in mapped.items():
                     sketch = self.sketch_dim and t.is_floating_point() and t.numel() > self.sketch_dim

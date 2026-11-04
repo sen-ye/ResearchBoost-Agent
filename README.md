@@ -151,7 +151,7 @@ Review criteria and the pull request format: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ![Goal mode: formulate and freeze the judge, then one agent iterates in a sandbox: profile, edit, time, full check, log](docs/figures/goal-mode-loop.svg)
 
-1. **Frame the task.** The owner fixes what may not change: the upstream workload and per-GPU load, the baseline precision, the training semantics. A formulating agent builds the judge for this task (`bench/` plus a frozen copy of [`numerics/`](numerics)), records the baseline, freezes δ, proves with known-bad candidates that every gate fires, and writes `GOAL.md`.
+1. **Frame the task.** The owner fixes what may not change: the upstream workload and per-GPU load, the baseline precision, the training semantics. A formulating agent builds the judge for this task (`bench/` plus a frozen copy of [`numerics/`](numerics)), records the baseline, freezes its seed-to-seed σ, proves with known-bad candidates that every gate fires, and writes `GOAL.md`.
 2. **Run goal mode.** One Codex or Claude Code `/goal` session gets the workspace, the GPUs and the skill cards inside a bubblewrap sandbox. Every round it profiles the current best version, changes one hotspot behind a switch, measures with `bench.py time`, and logs the round in `WORK_LOG.md`. [claw-orchestrator](https://github.com/Enderfga/claw-orchestrator) runs the session: it keeps the thread across restarts and usage limits, and when the agent stops it runs the full check itself. A supervisor watches from outside and intervenes only on rules and facts, never on optimization direction. See [docs/goal-mode.md](docs/goal-mode.md).
 3. **Accept only what the judge accepts.** `bench.py check` is the only verdict. A full-check PASS is then confirmed with a real end-to-end training or evaluation run.
 
@@ -160,9 +160,9 @@ Review criteria and the pull request format: [CONTRIBUTING.md](CONTRIBUTING.md).
 A candidate counts only if the task's frozen judge accepts it. The judge runs these gates in order and stops at the first one that fails:
 
 0. **Structure**: the training entry points the judge drives are unchanged (AST compare), data loading is bitwise identical, and exact items match: phase, call counts, RNG fingerprints, learning rate, cross-rank sync.
-1. **Benefit**: baseline → candidate → baseline timing in independent processes. A speedup that does not exceed `max(1.02, 1 + 2 × baseline spread)` is rejected as no benefit; precision is not evaluated.
+1. **Benefit**: the agent's own check times the candidate once against the baseline timing frozen at formulation; the harness's final check times baseline → candidate → baseline in independent processes. A speedup that does not exceed `max(1.02, 1 + 2 × baseline spread)` is rejected as no benefit; precision is not evaluated.
 2. **Bitwise**: every tensor recorded in short deterministic cases matches the baseline bit for bit → accept.
-3. **Statistical**: otherwise, paired-seed training trajectories; every endpoint must stay within δ, twice the baseline's own seed-to-seed standard deviation, frozen before any candidate is seen.
+3. **Statistical**: otherwise, one paired training trajectory on the first frozen seed; every endpoint's bias must stay within 3σ, σ the baseline's own seed-to-seed standard deviation, frozen before any candidate is seen.
 
 The judge is frozen and hashed before optimization starts and is never relaxed to let a candidate through. Details: [docs/judge.md](docs/judge.md).
 

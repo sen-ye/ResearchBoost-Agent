@@ -48,7 +48,7 @@ goal/setup_home.sh <task> train-opt-tiered-profiling train-opt-measurement train
 ENGINE=claude goal/setup_home.sh <task>     # run the goal on Claude Code
 ```
 
-Baseline records, baseline trajectories and frozen input digests are machine-specific and not stored in this repository. Re-create them inside the sandbox with `PREP=1`: record the baseline twice and confirm the two recordings are bitwise identical, record the baseline trajectories, freeze δ, and rewrite `task/formulation.json` (the prep README names the script for each step: `formulate.sh` and `freeze_inputs.py` for LLaVA, `bench.py record` and `freeze_traj.sh` for DMD2).
+Baseline records, baseline trajectories and frozen input digests are machine-specific and not stored in this repository. Re-create them inside the sandbox with `PREP=1`: record the baseline twice and confirm the two recordings are bitwise identical, record the baseline trajectories, freeze their seed-to-seed σ (gate 3 bounds one seed's bias by 3σ), and rewrite `task/formulation.json` (the prep README names the script for each step: `formulate.sh` and `freeze_inputs.py` for LLaVA, `bench.py record` and `freeze_traj.sh` for DMD2).
 
 <a id="3-verify-the-judge-on-the-reference"></a>
 

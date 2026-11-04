@@ -1,4 +1,5 @@
-"""Acceptance on the final full check: PASS, speedup at least the minimum, and the judge unchanged since launch.
+"""Acceptance on the final full check: a `check --final` with PASS, speedup at least the minimum, and the judge
+unchanged since launch.
 
     python3 accept.py <task> <min speedup>
 
@@ -26,6 +27,9 @@ print(f'status={status} speedup={speedup} evaluator_sha256={res.get("evaluator_s
 problems = []
 if status != 'PASS':
     problems.append(f'status is {status}, not PASS')
+if res.get('final') is not True or res.get('n1') or res.get('quick') or res.get('skip_timing'):
+    problems.append('not a full check --final (the harness\'s): '
+                    + ', '.join(f'{k}={res.get(k)}' for k in ('final', 'n1', 'quick', 'skip_timing')))
 if not isinstance(speedup, (int, float)) or speedup < min_speedup:
     problems.append(f'speedup {speedup} is below the minimum {min_speedup}')
 

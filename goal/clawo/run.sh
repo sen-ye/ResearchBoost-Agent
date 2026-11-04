@@ -48,10 +48,11 @@ import sys
 line = open(sys.argv[1]).read().strip()
 if line.startswith('/goal'):
     line = line[len('/goal'):].strip()
-line += (' When you stop, whether the goal is reached or you are wrapping up, write FINAL.json in the workspace'
-         ' root as {"tree": "<candidate directory>", "config": "<switch file, or null without one>"}, naming the'
-         ' version to be judged. After you stop, the harness runs its own full check on that version with the frozen'
-         ' bench; you will not see that run, and this goal does not wait for it.')
+line += (' Keep FINAL.json in the workspace root at all times as {"tree": "<candidate directory>", "config":'
+         ' "<switch file, or null without one>"}, naming the best version you have evidence for, and update it'
+         ' whenever that changes: your working time is limited and you may be stopped at any time. After you stop,'
+         ' the harness runs its own full check on that version with the frozen bench; you will not see that run,'
+         ' and this goal does not wait for it.')
 open(sys.argv[2], 'w').write(line + '\n')
 PY
 

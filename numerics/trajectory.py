@@ -108,3 +108,32 @@ def compare(frozen, cand_root, alpha=0.05, final=False):
     elif all(x == 'within' for x in states):
         report['verdict'] = 'equivalent'
     return report
+
+
+def bound(frozen, cand_root, k=3.0):
+    """Gate 3 of every check (the agent's, `check --n1`, the final check's): the candidate's trajectory on the first
+    frozen reference seed. Per endpoint the paired difference d = candidate - reference (the mean over the seeds run,
+    by default one) against the bias bound k x sigma_seed, sigma_seed the reference's own seed-to-seed standard
+    deviation frozen before any candidate (default k = 3): within |d| <= k x sigma, beyond otherwise. All within:
+    'equivalent' (PASS, N1); any beyond: 'different' (INCORRECT). No test and no further seeds."""
+    spec = frozen['spec']
+    ref_values = {int(s): v for s, v in frozen['reference_values'].items()}
+    cand_runs = load_runs(cand_root)
+    seeds = sorted(set(cand_runs) & set(ref_values))
+    report = {'seeds': seeds, 'sigma_k': k, 'endpoints': {}, 'verdict': 'error'}
+    if not seeds:
+        report['error'] = 'no candidate trajectory on a reference seed'
+        return report
+    cand_values = {seed: endpoint_values(cand_runs[seed], spec) for seed in seeds}
+    for e in spec['endpoints']:
+        n = e['name']
+        sigma = frozen['endpoints'][n]['sigma_seed']
+        limit = k * sigma
+        diffs = [cand_values[s][n] - ref_values[s][n] for s in seeds]
+        mean = statistics.fmean(diffs)
+        report['endpoints'][n] = {'state': 'within' if abs(mean) <= limit else 'beyond', 'mean': mean,
+                                  'sigma_seed': sigma, 'bound': limit,
+                                  'mean_in_sigma': mean / sigma if sigma else None, 'diffs': diffs}
+    report['verdict'] = ('equivalent' if all(e['state'] == 'within' for e in report['endpoints'].values())
+                         else 'different')
+    return report

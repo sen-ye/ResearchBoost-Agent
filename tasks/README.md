@@ -11,6 +11,10 @@ Each directory holds what the optimizing agent saw (`GOAL.md`) and the frozen ju
 | [llava](llava) | `GOAL.md`, `SUPERVISOR.md`, `bench/` (bench.py, timing, adapter, loader probe, per-rank load report), `numerics/`, `task/` (formulation, baseline, `judge_changes.md` audit, partition sensitivity, re-acceptance checks), `formulation/` (ceiling note, prep scripts) | The judge was reworked once after the owner relaxed three task constraints; the audit is in `task/judge_changes.md` |
 | [dmd2](dmd2) | `GOAL.md`, `GOAL_LINE.txt`, `SUPERVISOR.md`, `bench/` (bench.py, recipe, timing, adapter, wandb stub), `numerics/`, `task/` (formulation, baseline, profile, timing reference), `formulation/prep` (environment, assets, fixture, acceptance, trajectory freeze) | The most complete template for a new task |
 
+## Earlier judge rules
+
+These benches are the frozen judges the runs were measured by, and they predate the current check rules ([../docs/judge.md](../docs/judge.md#check-modes)): every full `check` times reference → candidate → reference, and gate 3 runs 3 seeds (then 6) against δ = 2σ, with a one-seed preview in the agent's own check. A new task follows the current rules: the agent's `check` times the candidate against the frozen reference timing, gate 3 bounds one seed's bias by 3σ, `check --n1` repeats gate 3 alone, and `check --final` is the harness's. Copy the structure of these benches, not those two gates.
+
 ## Archived records
 
 Files under `task/` (timing records, formulation, re-acceptance checks) are the records written during the runs. Machine paths in them were rewritten to `$ASSETS` / `$WORK` / `$LOCAL` and GPU UUIDs to `GPU-0`…`GPU-3` after the runs; numbers and digests are unchanged. The LLaVA and DMD2 `bench.py` now expand those variables when reading `bench.json` and `task/formulation.json` (set `ASSETS` before running them); because `bench.py` and `bench.json` are part of the evaluator hash, their `evaluator_sha256` also differs from the recorded one. The judging logic is unchanged.
